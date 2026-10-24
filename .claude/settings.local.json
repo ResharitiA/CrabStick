@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python -I -c \"import importlib.util; print\\('pypdf', bool\\(importlib.util.find_spec\\('pypdf'\\)\\)\\); print\\('PyPDF2', bool\\(importlib.util.find_spec\\('PyPDF2'\\)\\)\\); print\\('fitz', bool\\(importlib.util.find_spec\\('fitz'\\)\\)\\)\")",
+      "Bash(python *)"
+    ]
+  }
+}

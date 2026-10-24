@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Анализатор рисков оттока</title>
+  <style>
+    :root {
+      color-scheme:light; --page:#f9f9f7; --surface:#fcfcfb; --surface-2:#f0efec;
+      --ink:#0b0b0b; --muted:#52514e; --faint:#898781; --line:#e1e0d9;
+      --accent:#2a78d6; --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    }
+    @media (prefers-color-scheme:dark) {
+      :root { color-scheme:dark; --page:#0d0d0d; --surface:#1a1a19; --surface-2:#252523;
+        --ink:#f0efec; --muted:#c3c2b7; --faint:#898781; --line:#383835; --accent:#3987e5; }
+    }
+    * { box-sizing:border-box }
+    body { margin:0; background:var(--page); color:var(--ink); font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif }
+    button,input,select { font:inherit }
+    button { cursor:pointer }
+    header { position:sticky; top:0; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:16px clamp(16px,4vw,48px); border-bottom:1px solid var(--line); background:color-mix(in srgb,var(--page) 92%,transparent); backdrop-filter:blur(12px) }
+    header h1 { margin:0; font-size:20px }
+    nav { display:flex; align-items:center; gap:10px }
+    .link,.ghost { min-height:38px; padding:8px 12px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); text-decoration:none }
+    main { width:min(1440px,100%); margin:auto; padding:28px clamp(16px,4vw,48px) 60px }
+    .eyebrow { color:var(--muted); font-size:13px; letter-spacing:.06em; text-transform:uppercase }
+    .intro { display:flex; justify-content:space-between; align-items:end; gap:24px; margin-bottom:20px }
+    .intro h2 { margin:4px 0 0; font-size:clamp(25px,4vw,38px); line-height:1.15 }
+    #updated { color:var(--muted); white-space:nowrap }
+    .stats { display:grid; grid-template-columns:repeat(5,minmax(140px,1fr)); gap:12px; margin:20px 0 }
+    .stat { min-height:118px; padding:18px; border:1px solid var(--line); border-radius:12px; background:var(--surface) }
+    .stat span { display:block; color:var(--muted) }
+    .stat strong { display:block; margin-top:12px; font-size:29px; line-height:1.1; font-variant-numeric:tabular-nums }
+    .stat.loss { grid-column:span 2 }
+    .stat.loss strong { color:var(--critical) }
+    .explanation { margin:0 0 24px; color:var(--muted); font-size:14px }
+    .layout { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:18px; align-items:start }
+    section,.settings { border:1px solid var(--line); border-radius:12px; background:var(--surface) }
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; padding:14px; border-bottom:1px solid var(--line) }
+    .toolbar input,.toolbar select,.settings input { min-height:40px; border:1px solid var(--line); border-radius:8px; background:var(--surface); color:var(--ink); padding:8px 10px }
+    .toolbar input { flex:1; min-width:180px }
+    .table-wrap { overflow:auto }
+    table { width:100%; border-collapse:collapse; white-space:nowrap }
+    th,td { padding:12px 14px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top }
+    th { position:sticky; top:71px; z-index:2; background:var(--surface); color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em }
+    th button { padding:0; border:0; background:none; color:inherit; font:inherit; text-transform:inherit; letter-spacing:inherit }
+    tbody tr { cursor:pointer }
+    tbody tr:hover { background:var(--surface-2) }
+    .number { text-align:right; font-variant-numeric:tabular-nums }
+    .score { font-weight:750 }
+    .reason { max-width:310px; overflow:hidden; text-overflow:ellipsis; color:var(--muted) }
+    .badge { display:inline-flex; align-items:center; gap:7px; padding:4px 8px; border:1px solid currentColor; border-radius:999px; font-size:12px; font-weight:700 }
+    .badge::before { content:""; width:8px; height:8px; border-radius:50%; background:currentColor }
+    .high { color:var(--critical) }.medium { color:var(--serious) }.low { color:var(--good) }.not_assessed { color:var(--faint) }
+    .settings { position:sticky; top:88px; padding:18px }
+    .settings h3 { margin:0 0 4px }
+    .settings p { margin:0 0 16px; color:var(--muted); font-size:13px }
+    .setting { display:grid; grid-template-columns:1fr 82px; align-items:center; gap:8px; margin:9px 0 }
+    .setting label { font-size:13px }
+    .setting input { width:82px; text-align:right; font-variant-numeric:tabular-nums }
+    .settings hr { border:0; border-top:1px solid var(--line); margin:16px 0 }
+    .primary { width:100%; min-height:42px; margin-top:14px; border:0; border-radius:8px; background:var(--accent); color:white; font-weight:750 }
+    #save-status { min-height:22px; margin-top:9px; font-size:13px; color:var(--muted) }
+    dialog { width:min(760px,calc(100% - 32px)); max-height:85vh; padding:0; border:1px solid var(--line); border-radius:14px; background:var(--surface); color:var(--ink); box-shadow:0 24px 80px rgba(0,0,0,.25) }
+    dialog::backdrop { background:rgba(0,0,0,.45) }
+    .modal-head { position:sticky; top:0; display:flex; justify-content:space-between; gap:12px; padding:18px 22px; border-bottom:1px solid var(--line); background:var(--surface) }
+    .modal-head h3 { margin:0 }
+    .close { border:0; background:none; color:var(--ink); font-size:24px }
+    .modal-body { padding:20px 22px }
+    .feature { display:grid; grid-template-columns:1fr 110px; gap:12px; padding:10px 0; border-bottom:1px solid var(--line) }
+    .feature span:last-child { text-align:right; font-variant-numeric:tabular-nums }
+    .empty,.error { padding:40px; text-align:center; color:var(--muted) }
+    .error { color:var(--critical) }
+    @media (max-width:1000px) { .stats { grid-template-columns:repeat(2,1fr) }.stat.loss { grid-column:span 2 }.layout { grid-template-columns:1fr }.settings { position:static } }
+    @media (max-width:600px) { header { align-items:flex-start } header h1 { font-size:17px }.stats { grid-template-columns:1fr }.stat.loss { grid-column:auto }.intro { align-items:flex-start; flex-direction:column } th { top:71px } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Анализатор рисков оттока</h1>
+    <nav>
+      <a class="link" href="/api/v1/docs" target="_blank">Swagger</a>
+      <button class="ghost" id="logout">Выйти</button>
+    </nav>
+  </header>
+  <main>
+    <div class="intro">
+      <div><div class="eyebrow">Текущий снимок</div><h2>Клиенты, которым нужно внимание</h2></div>
+      <div id="updated" aria-live="polite"></div>
+    </div>
+    <div class="stats" aria-label="Сводные показатели">
+      <div class="stat loss"><span>Потенциальные потери</span><strong id="loss">—</strong></div>
+      <div class="stat"><span>Высокий риск</span><strong id="high-count">—</strong></div>
+      <div class="stat"><span>Средний риск</span><strong id="medium-count">—</strong></div>
+      <div class="stat"><span>Низкий риск</span><strong id="low-count">—</strong></div>
+    </div>
+    <p class="explanation" id="explanation"></p>
+    <div class="layout">
+      <section>
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="Поиск по ID или email" aria-label="Поиск клиентов">
+          <select id="risk-filter" aria-label="Фильтр по риску">
+            <option value="">Все уровни риска</option>
+            <option value="high">Высокий</option>
+            <option value="medium">Средний</option>
+            <option value="low">Низкий</option>
+            <option value="not_assessed">Нет оценки</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th><button data-sort="id">ID <span></span></button></th>
+              <th><button data-sort="email">Email <span></span></button></th>
+              <th class="number"><button data-sort="balance">Баланс <span></span></button></th>
+              <th class="number"><button data-sort="totalReplenished">Пополнено <span></span></button></th>
+              <th class="number"><button data-sort="score">Score <span></span></button></th>
+              <th>Уровень</th><th>Главная причина</th>
+            </tr></thead>
+            <tbody id="customers"><tr><td colspan="7" class="empty">Загрузка…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+      <aside class="settings">
+        <h3>Настройка модели</h3>
+        <p>Изменения сохраняются в PostgreSQL и сразу пересчитывают рейтинг.</p>
+        <form id="settings-form">
+          <div id="weights"></div>
+          <hr>
+          <div class="setting"><label for="medium">Порог среднего</label><input id="medium" type="number" min="0" max="100" step="0.1"></div>
+          <div class="setting"><label for="high">Порог высокого</label><input id="high" type="number" min="0" max="100" step="0.1"></div>
+          <div class="setting"><label for="horizon">Горизонт, дней</label><input id="horizon" type="number" min="1" max="365"></div>
+          <button class="primary" type="submit">Сохранить и пересчитать</button>
+          <div id="save-status" role="status"></div>
+        </form>
+      </aside>
+    </div>
+  </main>
+  <dialog id="detail"><div class="modal-head"><h3 id="detail-title">Клиент</h3><button class="close" aria-label="Закрыть">×</button></div><div class="modal-body" id="detail-body"></div></dialog>
+  <script>
+    const labels = {
+      expiring_soon:"Скорое окончание", autoprolong_disabled:"Автопродление выключено",
+      prolong_wait:"Ожидание оплаты", insufficient_funds:"Недостаточно средств",
+      uncovered_cost:"Непокрытая стоимость", failed_prolong:"Ошибки продления",
+      no_successful_prolong:"Нет успешных продлений", suspended:"Приостановленные",
+      blocked:"Заблокированные", deleted:"Удалённые"
+    };
+    const levelLabels = {high:"Высокий",medium:"Средний",low:"Низкий",not_assessed:"Нет оценки"};
+    let sortBy = "score", sortOrder = "desc", settingsLoaded = false, debounce;
+    const money = cents => new Intl.NumberFormat("ru-RU",{style:"currency",currency:"EUR"}).format(cents / 100);
+    const api = async (url, options={}) => {
+      const response = await fetch(url, options);
+      if (response.status === 401) { location.href="/login"; throw new Error("Требуется вход"); }
+      if (!response.ok) {
+        const body = await response.json().catch(()=>({}));
+        throw new Error(body.detail || "Ошибка запроса");
+      }
+      return response.status === 204 ? null : response.json();
+    };
+    async function refresh() {
+      const query = new URLSearchParams({sort_by:sortBy,sort_order:sortOrder});
+      const risk = document.querySelector("#risk-filter").value;
+      const search = document.querySelector("#search").value.trim();
+      if (risk) query.set("risk_level",risk);
+      if (search) query.set("search",search);
+      try {
+        const [summary, customers, settings] = await Promise.all([
+          api("/api/v1/analytics/summary"), api("/api/v1/customers?"+query), api("/api/v1/model/settings")
+        ]);
+        renderSummary(summary); renderCustomers(customers.items); renderSort();
+        if (!settingsLoaded) { renderSettings(settings); settingsLoaded=true; }
+        document.querySelector("#updated").textContent="Обновлено "+new Date().toLocaleTimeString("ru-RU");
+      } catch (error) {
+        document.querySelector("#customers").innerHTML='<tr><td colspan="7" class="error">'+escapeHtml(error.message)+'</td></tr>';
+      }
+    }
+    function renderSummary(data) {
+      document.querySelector("#loss").textContent=money(data.potential_loss);
+      document.querySelector("#high-count").textContent=data.risk_counts.high;
+      document.querySelector("#medium-count").textContent=data.risk_counts.medium;
+      document.querySelector("#low-count").textContent=data.risk_counts.low;
+      document.querySelector("#explanation").textContent=data.explanation+" Денежные значения показаны в евро.";
+    }
+    function renderCustomers(items) {
+      const body=document.querySelector("#customers");
+      if (!items.length) { body.innerHTML='<tr><td colspan="7" class="empty">Клиенты не найдены</td></tr>'; return; }
+      body.innerHTML=items.map(item=>`<tr data-id="${item.id}" tabindex="0">
+        <td>${item.id}</td><td>${escapeHtml(item.email)}</td>
+        <td class="number">${money(item.balance)}</td><td class="number">${money(item.totalReplenished)}</td>
+        <td class="number score">${item.score ?? "—"}</td>
+        <td><span class="badge ${item.risk_level}">${levelLabels[item.risk_level]}</span></td>
+        <td class="reason" title="${escapeHtml(item.reasons[0])}">${escapeHtml(item.reasons[0])}</td></tr>`).join("");
+      body.querySelectorAll("tr").forEach(row=>{
+        row.addEventListener("click",()=>showDetail(row.dataset.id));
+        row.addEventListener("keydown",event=>{ if(event.key==="Enter") showDetail(row.dataset.id); });
+      });
+    }
+    function renderSort() {
+      document.querySelectorAll("[data-sort]").forEach(button=>{
+        button.querySelector("span").textContent=button.dataset.sort===sortBy?(sortOrder==="asc"?"↑":"↓"):"";
+      });
+    }
+    function renderSettings(data) {
+      document.querySelector("#weights").innerHTML=Object.entries(data.weights).map(([key,value])=>`
+        <div class="setting"><label for="w-${key}">${labels[key]||key}</label>
+        <input id="w-${key}" data-weight="${key}" type="number" min="0" max="100" step="0.1" value="${value}"></div>`).join("");
+      document.querySelector("#medium").value=data.medium_threshold;
+      document.querySelector("#high").value=data.high_threshold;
+      document.querySelector("#horizon").value=data.horizon_days;
+    }
+    async function showDetail(id) {
+      const dialog=document.querySelector("#detail");
+      document.querySelector("#detail-body").innerHTML='<div class="empty">Загрузка…</div>';
+      dialog.showModal();
+      try {
+        const data=await api("/api/v1/customers/"+id);
+        document.querySelector("#detail-title").textContent=`Клиент #${id} · ${data.account.email}`;
+        const risk=data.risk;
+        document.querySelector("#detail-body").innerHTML=`
+          <p><span class="badge ${risk.risk_level}">${levelLabels[risk.risk_level]}</span></p>
+          <h4>Score: ${risk.score ?? "нет оценки"} · Лояльность: ${risk.loyalty_score ?? "—"}</h4>
+          <p>Потенциальные потери: <strong>${money(risk.potential_loss)}</strong>; экспозиция: ${money(risk.exposure)}; доступно: ${money(risk.spendable_balance)}.</p>
+          <h4>Вклад признаков</h4>
+          ${risk.features.filter(x=>x.contribution>0).sort((a,b)=>b.contribution-a.contribution).map(x=>`
+            <div class="feature"><span>${escapeHtml(x.label)}<br><small>сигнал ${x.value} × вес ${x.weight}</small></span><span>+${x.contribution}</span></div>`).join("")||"<p>Значимые сигналы не обнаружены.</p>"}
+          <h4>Услуги: ${data.services.length}</h4>
+          <p>${data.services.map(x=>`${escapeHtml(x.name)} — ${escapeHtml(x.status)}, ${money(x.price)}`).join("<br>")||"Нет услуг"}</p>`;
+      } catch(error) { document.querySelector("#detail-body").innerHTML='<div class="error">'+escapeHtml(error.message)+'</div>'; }
+    }
+    function escapeHtml(value) { const node=document.createElement("div"); node.textContent=String(value); return node.innerHTML; }
+    document.querySelectorAll("[data-sort]").forEach(button=>button.addEventListener("click",()=>{
+      if(sortBy===button.dataset.sort) sortOrder=sortOrder==="asc"?"desc":"asc"; else { sortBy=button.dataset.sort; sortOrder="asc"; }
+      refresh();
+    }));
+    document.querySelector("#risk-filter").addEventListener("change",refresh);
+    document.querySelector("#search").addEventListener("input",()=>{clearTimeout(debounce);debounce=setTimeout(refresh,250)});
+    document.querySelector("#settings-form").addEventListener("submit",async event=>{
+      event.preventDefault();
+      const status=document.querySelector("#save-status"); status.textContent="Сохранение…";
+      const weights=Object.fromEntries([...document.querySelectorAll("[data-weight]")].map(x=>[x.dataset.weight,Number(x.value)]));
+      try {
+        const saved=await api("/api/v1/model/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+          weights,medium_threshold:Number(document.querySelector("#medium").value),
+          high_threshold:Number(document.querySelector("#high").value),horizon_days:Number(document.querySelector("#horizon").value)
+        })});
+        renderSettings(saved); status.textContent="Сохранено. Рейтинг пересчитан."; await refresh();
+      } catch(error) { status.textContent=error.message; }
+    });
+    document.querySelector("#logout").addEventListener("click",async()=>{await api("/api/v1/auth/logout",{method:"POST"});location.href="/login"});
+    document.querySelector(".close").addEventListener("click",()=>document.querySelector("#detail").close());
+    document.querySelector("#detail").addEventListener("click",event=>{if(event.target===event.currentTarget) event.currentTarget.close()});
+    refresh(); setInterval(refresh,10000);
+  </script>
+</body>
+</html>
