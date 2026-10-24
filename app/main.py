@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 from collections import Counter, defaultdict
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,7 +12,13 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, s
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.db import fetch_dataset, get_settings, replace_snapshot, save_settings
+from app.db import (
+    fetch_dataset,
+    get_settings,
+    replace_snapshot,
+    save_settings,
+    simulate_dataset_step,
+)
 from app.risk import DEFAULT_WEIGHTS, calculate_customer_risk
 from app.schemas import LoginRequest, ModelSettingsPatch, SnapshotInput
 
@@ -19,12 +27,37 @@ BASE_DIR = Path(__file__).resolve().parent
 APP_USERNAME = os.getenv("APP_USERNAME", "admin")
 APP_PASSWORD = os.getenv("APP_PASSWORD", "change-me")
 SESSION_SECRET = os.getenv("SESSION_SECRET", "development-secret-change-me")
+DEMO_SIMULATION_ENABLED = os.getenv("DEMO_SIMULATION_ENABLED", "false").lower() == "true"
+DEMO_SIMULATION_INTERVAL = 10
+
+
+async def simulation_loop() -> None:
+    while True:
+        await asyncio.sleep(DEMO_SIMULATION_INTERVAL)
+        await asyncio.to_thread(simulate_dataset_step)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    simulation_task = None
+    if DEMO_SIMULATION_ENABLED:
+        await asyncio.to_thread(simulate_dataset_step)
+        simulation_task = asyncio.create_task(simulation_loop())
+    try:
+        yield
+    finally:
+        if simulation_task is not None:
+            simulation_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await simulation_task
+
 
 app = FastAPI(
     title="Анализатор рисков оттока",
     version="1.0.0",
     docs_url="/api/v1/docs",
     openapi_url="/api/v1/openapi.json",
+    lifespan=lifespan,
 )
 app.add_middleware(
     SessionMiddleware,

@@ -23,6 +23,7 @@ services:
       APP_PASSWORD: ${APP_PASSWORD:-change-me}
       SESSION_SECRET: ${SESSION_SECRET:-local-development-secret-change-in-production}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DEMO_SIMULATION_ENABLED: ${DEMO_SIMULATION_ENABLED:-true}
     ports:
       - "8000:8000"
     depends_on:

@@ -38,6 +38,73 @@ def fetch_dataset() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[di
     return list(accounts), list(services), list(transactions)
 
 
+def simulate_dataset_step() -> None:
+    with connection() as conn:
+        conn.execute(
+            """
+            WITH simulation_clock AS (
+                SELECT floor(extract(epoch FROM clock_timestamp()) / 10)::bigint AS tick
+            )
+            UPDATE public.accounts AS account
+            SET balance = CASE mod(account.id + simulation_clock.tick, 4)
+                    WHEN 0 THEN account.balance + 1200
+                    WHEN 1 THEN CASE WHEN account.balance >= 900 THEN account.balance - 900 ELSE account.balance + 450 END
+                    WHEN 2 THEN account.balance + 350
+                    ELSE CASE WHEN account.balance >= 200 THEN account.balance - 200 ELSE account.balance + 250 END
+                END,
+                "withdrawBalance" = account."withdrawBalance" + mod(account.id + simulation_clock.tick, 5) * 10,
+                "totalReplenished" = account."totalReplenished"
+                    + CASE WHEN mod(account.id + simulation_clock.tick, 3) = 0 THEN 750 ELSE 100 END,
+                "bonusBalance" = account."bonusBalance" + mod(account.id + simulation_clock.tick, 4) * 25,
+                "bonusState" = CASE WHEN mod(account.id + simulation_clock.tick, 2) = 0
+                    THEN 'unlocked' ELSE 'locked' END
+            FROM simulation_clock
+            """
+        )
+        conn.execute(
+            """
+            WITH simulation_clock AS (
+                SELECT floor(extract(epoch FROM clock_timestamp()) / 10)::bigint AS tick
+            ), next_values AS (
+                SELECT service.id,
+                       mod(service.id + simulation_clock.tick, 5) AS phase
+                FROM public.services AS service
+                CROSS JOIN simulation_clock
+            )
+            UPDATE public.services AS service
+            SET status = CASE next_values.phase
+                    WHEN 0 THEN 'active'
+                    WHEN 1 THEN 'prolong_wait'
+                    WHEN 2 THEN 'suspended'
+                    WHEN 3 THEN 'blocked'
+                    ELSE 'deleted'
+                END,
+                "autoProlong" = mod(service.id + simulation_clock.tick, 3) = 0,
+                "expiresAt" = CASE next_values.phase
+                    WHEN 0 THEN GREATEST(service."createdAt", clock_timestamp() + interval '45 days')
+                    WHEN 1 THEN GREATEST(service."createdAt", clock_timestamp() - interval '1 day')
+                    WHEN 2 THEN GREATEST(service."createdAt", clock_timestamp() + interval '7 days')
+                    ELSE GREATEST(service."createdAt", clock_timestamp())
+                END
+            FROM next_values, simulation_clock
+            WHERE service.id = next_values.id
+            """
+        )
+        conn.execute(
+            """
+            WITH simulation_clock AS (
+                SELECT floor(extract(epoch FROM clock_timestamp()) / 10)::bigint AS tick
+            )
+            UPDATE public.transactions AS tx
+            SET status = CASE WHEN mod(tx.id + simulation_clock.tick, 3) = 0
+                    THEN 'not_performed' ELSE 'performed' END,
+                "performedAt" = CASE WHEN mod(tx.id + simulation_clock.tick, 3) = 0
+                    THEN NULL ELSE GREATEST(tx."createdAt", clock_timestamp()) END
+            FROM simulation_clock
+            """
+        )
+
+
 def get_settings() -> dict[str, Any]:
     with connection() as conn:
         row = conn.execute(
