@@ -27,10 +27,10 @@ APP_USERNAME=analyst APP_PASSWORD='strong-password' SESSION_SECRET='long-random-
 
 ## Адреса
 
-- панель: <http://localhost:8000/>
-- Swagger: <http://localhost:8000/api/v1/docs>
-- Prometheus: <http://localhost:8000/metrics>
-- healthcheck: <http://localhost:8000/health>
+- панель: <http://84.21.191.24:8000/>
+- Swagger: <http://84.21.191.24:8000/api/v1/docs>
+- Prometheus: <http://84.21.191.24:8000/metrics>
+- healthcheck: <http://84.21.191.24:8000/health>
 
 Панель и API данных защищены подписанной cookie-сессией. `/metrics` открыт для Prometheus и не содержит email или других персональных данных.
 
